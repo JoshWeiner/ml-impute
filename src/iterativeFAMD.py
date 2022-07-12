@@ -10,7 +10,7 @@ from tqdm import tqdm
 from numpy.linalg import multi_dot
 import time
 
-class FAMD:
+class iterativeFAMD:
         
     def calculateDiagonal(self, dataframe):
         stdevs = np.std(dataframe[self.continuous]).replace(0, 0.1)
