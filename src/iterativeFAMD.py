@@ -1,11 +1,10 @@
-import scipy.linalg as la
 import sklearn.utils.extmath as extmath
 import math
 import pandas as pd
 import numpy as np
 import random
 import jax.numpy as jnp
-from jax import jit
+import scipy.linalg as la
 from tqdm import tqdm
 from numpy.linalg import multi_dot
 import time
@@ -31,8 +30,10 @@ class iterativeFAMD:
         df_list = [dropped]
         
         for col in tqdm(features_to_encode, position=0, leave=True):
+            print(col)
             sliced = feature_df[col].dropna()
             one_hot = pd.get_dummies(sliced, prefix=col+"_", sparse=True)
+            #print(col, one_hot.shape)
             one_hot = one_hot.reindex(feature_df[col].index)
             encoded_columns.extend(one_hot.columns.values)
             df_list.append(one_hot)
@@ -51,6 +52,8 @@ class iterativeFAMD:
             if np.isnan(dataframe[c].values).any():
                 dataframe[c] = np.where(dataframe[c].isnull(), prop, dataframe[c])
             stdev = np.std(dataframe[c])
+            if stdev == 0:
+                raise Exception(f'Column [{c}] has zero variance!')
             dataframe[c] = dataframe[c] / stdev
             stdevs[index] = stdev
         for index, c in enumerate(self.categorical):
@@ -66,9 +69,10 @@ class iterativeFAMD:
         variances = [s ** 2 for s in stdevs]
         variances.extend(proportions)
         diag = np.diag(variances)
+        #print(dataframe, diag)
         return dataframe, diag
 
-    def famdImpute(self, dataframe, max_iter):
+    def famdImpute(self, dataframe):
         j = 0
         diag = None
         X = dataframe.copy()
@@ -83,14 +87,12 @@ class iterativeFAMD:
             'fillna' : 0.0
         }
         obj = time.gmtime(0) 
-        epoch = time.asctime(obj) 
-        for i in tqdm(range(max_iter), position=0, leave=False):
+        epoch = time.asctime(obj)
+        for i in tqdm(range(self.max_iter), position=0, leave=False):
             prev_df = X.copy()
-            
             start = time.time()
             new_df, diag = self.initializeValues(X)
             times['initialize'] = times['initialize'] + (time.time() - start)
-            
             start = time.time()
             new_diag = diag.copy()
             for j in range(diag.shape[0]):
@@ -104,11 +106,16 @@ class iterativeFAMD:
             start = time.time()
             M = np.mean(XD, axis=0)
             means = np.broadcast_to(M, XD.shape)
-            resultant = XD - means
-            n_elements = math.floor(np.minimum(resultant.shape[0], resultant.shape[1]) * 0.7)
+            resultant = (XD - means).to_numpy()
             times['means'] = times['means'] + (time.time() - start)
             start = time.time()
             U, s, VT = jnp.linalg.svd(resultant, full_matrices=False)
+            n_elements = 0
+            explained_var = np.cumsum((s**2)/np.sum(s**2))
+            for index, v in enumerate(explained_var):
+                if v > self.explained_var:
+                    n_elements = index
+                    break
             U = U[:, :n_elements]
             sigma = np.diag(s[:n_elements])
             VT = VT[: n_elements]
@@ -127,12 +134,11 @@ class iterativeFAMD:
                 else:
                     X[c] = dataframe[c]
             times['fillna'] = times['fillna'] + (time.time() - start)
-            if i > 0:
-                diff = np.sqrt(((X.values - prev_df.values)**2).sum())
-                old = np.sqrt(((prev_df.values)**2).sum())
-                if (diff/old) < 1e-3:
-                    break
-        
+            diff = np.sqrt(((X.values - prev_df.values)**2).sum())
+            old = np.sqrt(((prev_df.values)**2).sum())
+            #print(i, explained_var, diff, diff/old)
+            if (diff/old) < self.tol:
+                break
         for t in times:
             print(t, times[t])
         return X
@@ -150,7 +156,7 @@ class iterativeFAMD:
     def filterColumns(self, features_to_encode, exclude):
         new_features = []
         drop_cols = [e for e in exclude]
-        date_col_substrings = ["_dt", "date", "_date"]
+        date_col_substrings = ["dt", "date", "_date"]
         for col in features_to_encode:
             if any(substring in col.lower() for substring in date_col_substrings) or col in exclude:
                 drop_cols.append(col)
@@ -161,7 +167,11 @@ class iterativeFAMD:
             
         
 
-    def impute(self, dataframe, max_iter=1000, encode_cols=[], exclude_cols=[]):
+    def impute(self, dataframe, encode_cols=[], exclude_cols=[], max_iter=1000, tol = 1e-4, explained_var = 0.95):
+        self.tol = tol
+        self.explained_var = explained_var
+        self.max_iter = max_iter
+
         if len(encode_cols) == 0:
             encode_cols = dataframe.columns[(dataframe.dtypes=='object') | (dataframe.dtypes=='category')].tolist()
         features_to_encode, drop_cols = self.filterColumns(encode_cols, exclude_cols)
@@ -173,6 +183,6 @@ class iterativeFAMD:
         self.continuous = impute_df.columns.difference(categorical)
         impute_df = impute_df.drop(columns=drop_cols)
         # Perform single value decomposition
-        impute_df = self.famdImpute(impute_df, max_iter)
+        impute_df = self.famdImpute(impute_df)
         dataframe = self.fillNa(dataframe, impute_df, features_to_encode)
         return dataframe
