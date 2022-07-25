@@ -33,8 +33,13 @@ class iterativeFAMD:
             print(col)
             sliced = feature_df[col].dropna()
             one_hot = pd.get_dummies(sliced, prefix=col+"_", sparse=True)
-            #print(col, one_hot.shape)
-            one_hot = one_hot.reindex(feature_df[col].index)
+            print(one_hot.shape)
+            if len(np.unique(sliced.values)) == 1:
+                #print(one_hot)
+                pass
+            else:
+                #print(col, one_hot.shape)
+                one_hot = one_hot.reindex(feature_df[col].index)
             encoded_columns.extend(one_hot.columns.values)
             df_list.append(one_hot)
             one_hot = None
@@ -175,7 +180,7 @@ class iterativeFAMD:
         if len(encode_cols) == 0:
             encode_cols = dataframe.columns[(dataframe.dtypes=='object') | (dataframe.dtypes=='category')].tolist()
         features_to_encode, drop_cols = self.filterColumns(encode_cols, exclude_cols)
-        impute_df = dataframe.copy()
+        impute_df = dataframe.copy().reset_index()
         # Create encoded dataframe with initial values for nan values
         #impute_df[features_to_encode] = impute_df[features_to_encode].astype(object)
         impute_df, categorical = self.encodeFeatures(impute_df, features_to_encode)
