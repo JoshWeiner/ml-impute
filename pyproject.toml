@@ -11,7 +11,7 @@ authors = [
 description = "A package for single and multiple imputation via Iterative Factorial Analysis for Mixed Datatypes"
 readme = "README.md"
 license = { file="LICENSE" }
-requires-python = ">=3.7"
+requires-python = ">=3.6"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
