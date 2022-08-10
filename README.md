@@ -44,11 +44,11 @@ ML-Impute is currently available on Test-PyPi.
 
 **Unix/Mac OS**
 ```
-python3 -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ ml-impute
+pip install -i https://test.pypi.org/simple/ ml-impute
 ```
 **Windows**
 ```
-py -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ ml-impute
+py -m pip install -i https://test.pypi.org/simple/ ml-impute
 ```
 <hr>
 
