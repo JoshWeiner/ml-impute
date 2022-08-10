@@ -48,8 +48,8 @@ setup(
         "Programming Language :: Python :: 3 :: Only",
     ],
     keywords=[ "machine learning", "synthetic data", "imputation", "singular imputation", "multiple imputation"],
-    package_dir={"": "src/mpute"},  # Optional
-    packages=find_packages(where="/src/"),  # Required
+    package_dir={"": "mpute"},  # Optional
+    packages=find_packages(where="mpute"),  # Required
     python_requires=">=3.6, <4",
     install_requires=["pandas", "numpy", "jax", "jaxlib"],  # Optional
     # extras_require={  # Optional
