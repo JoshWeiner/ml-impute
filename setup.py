@@ -18,7 +18,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="mpute",  # Required
-    version="0.0.1",  # Required
+    version="0.0.4",  # Required
     description="A package for synthetic data generation for imputation using single and multiple imputation methods.",  # Optional
     long_description=long_description,  # Optional
     long_description_content_type="text/markdown",  # Optional (see note above)
