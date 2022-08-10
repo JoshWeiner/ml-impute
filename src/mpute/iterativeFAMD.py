@@ -1,23 +1,19 @@
-import sklearn.utils.extmath as extmath
-import math
+import math, random
 import pandas as pd
 import numpy as np
-import random
+from jax import jit
 import jax.numpy as jnp
-import scipy.linalg as la
-from tqdm import tqdm
-from numpy.linalg import multi_dot
-import time
 
-class iterativeFAMD:
+class iterativeFAMD(object):
+
+    def __init__(self):
+        self.explained_var = 0.95
+        self.max_iter = 1000
+        self.tol = 1e-4
         
-    def calculateDiagonal(self, dataframe):
-        stdevs = np.std(dataframe[self.continuous]).replace(0, 0.1)
-        proportions = dataframe[self.categorical].abs().mean().replace(0, 0.1)
-        variances = stdevs ** 2
-        diag = pd.concat([variances, proportions])
-        diag = pd.DataFrame(np.diag(diag),index=diag.index,columns=diag.index)
-        return diag
+    def calculateSVD(self, data):
+        U, s, VT = jnp.linalg.svd(data, full_matrices=False)
+        return U, s, VT
         
     def encodeFeatures(self, dataframe, features_to_encode):
         # Maintain dataframe for columns that do not need to be encoded
@@ -29,15 +25,12 @@ class iterativeFAMD:
         encoded_columns = []
         df_list = [dropped]
         
-        for col in tqdm(features_to_encode, position=0, leave=True):
+        for col in features_to_encode:
             sliced = feature_df[col].dropna()
             one_hot = pd.get_dummies(sliced, prefix=col+"_", sparse=True)
-            #print(one_hot.shape)
             if len(np.unique(sliced.values)) == 1:
-                #print(one_hot)
                 pass
             else:
-                #print(col, one_hot.shape)
                 one_hot = one_hot.reindex(feature_df[col].index)
             encoded_columns.extend(one_hot.columns.values)
             df_list.append(one_hot)
@@ -46,20 +39,18 @@ class iterativeFAMD:
         return dropped, encoded_columns
     
     def initializeValues(self, dataframe):
-        # Get columns of continuous variables
         proportions = np.zeros(len(self.categorical))
         stdevs = np.zeros(len(self.continuous))
 
         # Sustitute the column means as the value for continuous nans, then standardize column
+        # Substitute the missing values of categorical nans as the proportion of their category
         for index, c in enumerate(self.continuous):
             prop = dataframe[c].mean()
             if np.isnan(dataframe[c].values).any():
                 dataframe[c] = np.where(dataframe[c].isnull(), prop, dataframe[c])
             stdev = np.std(dataframe[c])
             if stdev == 0:
-                #print(c, dataframe[c].value_counts(ascending=False) )
-                stdev = 0.01#pass
-                #raise Exception(f'Column [{c}] has zero variance!')
+                stdev = 0.01
             else:
                 dataframe[c] = dataframe[c] / stdev
             stdevs[index] = stdev
@@ -70,9 +61,7 @@ class iterativeFAMD:
             proportions[index] = prop
             dataframe[c] = dataframe[c] / np.sqrt(prop)        
 
-        # Substitute the missing values of categorical nans as the proportion of their category
         # Standardize by dividing each column by the square root of the column-wise proportion of each category
-
         variances = [s ** 2 for s in stdevs]
         variances.extend(proportions)
         diag = np.diag(variances)
@@ -83,7 +72,7 @@ class iterativeFAMD:
         diag = None
         X = dataframe.copy()
         prev_diff = np.infty
-        for i in tqdm(range(self.max_iter), position=0, leave=False):
+        for i in range(self.max_iter):
             prev_df = X.copy()
             new_df, diag = self.initializeValues(X)
             new_diag = diag.copy()
@@ -94,8 +83,8 @@ class iterativeFAMD:
             #XD = pd.DataFrame(np.dot(new_df, new_diag), index=X.index, columns=X.columns)
             M = np.mean(XD, axis=0)
             means = np.broadcast_to(M, XD.shape)
-            resultant = (XD - means).to_numpy()
-            U, s, VT = jnp.linalg.svd(resultant, full_matrices=False)
+            resultant = jnp.asarray((XD - means))
+            U, s, VT = jit(self.calculateSVD)(resultant)
             n_elements = 0
             explained_var = np.cumsum((s**2)/np.sum(s**2))
             for index, v in enumerate(explained_var):
@@ -106,6 +95,10 @@ class iterativeFAMD:
             sigma = np.diag(s[:n_elements])
             VT = VT[: n_elements]
             lr = np.dot(np.dot(U, sigma), VT)
+            if self.noise == "gaussian":
+                mu, sig = 0, 0.1 
+                noise = np.random.normal(mu, sig, [lr.shape[0], lr.shape[1]])
+                lr = lr + noise
             mul = (lr + means).dot(diag)
             
             for index, c in enumerate(X.columns):
@@ -124,7 +117,7 @@ class iterativeFAMD:
         for col in to_fill.columns.values:
             if col in categorical:
                 cols_to_max = [c for c in imputed.columns.values if c.startswith(col)]
-                to_fill[col] = imputed[cols_to_max].idxmax(axis=1).str.split("__").apply(lambda x : x[1])
+                to_fill[col] = imputed[cols_to_max].idxmax(axis=1).str.split("__").apply(lambda x : x[1]).astype(to_fill[col].dtype)
             else:
                 to_fill[col] = imputed[col]
         return to_fill
@@ -145,22 +138,7 @@ class iterativeFAMD:
             drop_cols.append("index")
         return new_features, drop_cols
             
-        
-
-    def impute(self, dataframe, encode_cols=[], exclude_cols=[], max_iter=1000, tol = 1e-4, explained_var = 0.95):
-        self.tol = tol
-        self.explained_var = explained_var
-        self.max_iter = max_iter
-        if len(encode_cols) == 0:
-            encode_cols = dataframe.columns[(dataframe.dtypes=='object') | (dataframe.dtypes=='category')].tolist()
-        features_to_encode, drop_cols = self.filterColumns(encode_cols, exclude_cols)
-        impute_df = dataframe.copy().reset_index().drop(columns=np.array(drop_cols))
-        # Create encoded dataframe with initial values for nan values
-        #impute_df[features_to_encode] = impute_df[features_to_encode].astype(object)
-        impute_df, categorical = self.encodeFeatures(impute_df, features_to_encode)
-        self.categorical = categorical
-        self.continuous = impute_df.columns.difference(categorical)
-        # Perform single value decomposition
+    def impute(self, impute_df, dataframe, features_to_encode):
         impute_df = self.famdImpute(impute_df)
         dataframe = self.fillNa(dataframe, impute_df, features_to_encode)
         return dataframe
