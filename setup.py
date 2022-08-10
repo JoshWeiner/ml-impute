@@ -52,7 +52,7 @@ setup(
     # packages=find_packages(where="mpute"),  # Required
     python_requires=">=3.6, <4",
     install_requires=["pandas", "numpy", "jax", "jaxlib"],  # Optional
-    packages=["mpute"]
+    packages=["mpute"],
     # extras_require={  # Optional
     #     "dev": ["check-manifest"]
     #     # "test": ["coverage"],
