@@ -84,7 +84,7 @@ class iterativeFAMD(object):
             M = np.mean(XD, axis=0)
             means = np.broadcast_to(M, XD.shape)
             resultant = jnp.asarray((XD - means))
-            U, s, VT = jit(self.calculateSVD)(resultant)
+            U, s, VT = self.calculateSVD(resultant)
             n_elements = 0
             explained_var = np.cumsum((s**2)/np.sum(s**2))
             for index, v in enumerate(explained_var):
@@ -96,7 +96,7 @@ class iterativeFAMD(object):
             VT = VT[: n_elements]
             lr = np.dot(np.dot(U, sigma), VT)
             if self.noise == "gaussian":
-                mu, sig = 0, 0.1 
+                mu, sig = 0, np.std(lr) 
                 noise = np.random.normal(mu, sig, [lr.shape[0], lr.shape[1]])
                 lr = lr + noise
             mul = (lr + means).dot(diag)
