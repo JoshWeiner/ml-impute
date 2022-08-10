@@ -34,7 +34,7 @@ setup(
         "Development Status :: 4 - Beta",
         # Indicate who your project is intended for
         "Intended Audience :: Developers",
-        "Topic :: Machine Learning :: Synthetic Data Generation",
+        "Topic :: Software Development :: Libraries :: Python Modules",
         # Pick your license as you wish
         "License :: OSI Approved :: MIT License",
         # Specify the Python versions you support here. In particular, ensure
