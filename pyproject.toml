@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ml-impute"
-version = "0.0.2"
+name = "mpute"
+version = "0.0.1"
 authors = [
   { name="Joshua Weiner", email="joshuaweinernyc@gmail.com" },
 ]

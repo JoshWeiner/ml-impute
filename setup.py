@@ -17,8 +17,8 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 # Fields marked as "Optional" may be commented out.
 
 setup(
-    name="ml-impute",  # Required
-    version="0.0.2",  # Required
+    name="mpute",  # Required
+    version="0.0.1",  # Required
     description="A package for synthetic data generation for imputation using single and multiple imputation methods.",  # Optional
     long_description=long_description,  # Optional
     long_description_content_type="text/markdown",  # Optional (see note above)
