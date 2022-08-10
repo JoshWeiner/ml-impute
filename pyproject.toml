@@ -8,14 +8,18 @@ version = "0.0.1"
 authors = [
   { name="Joshua Weiner", email="joshuaweinernyc@gmail.com" },
 ]
-description = "A package for single and multiple imputation via Iterative Factorial Analysis for Mixed Datatypes"
+description = "A package for synthetic data generation for imputation using single and multiple imputation methods."
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.6"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+dependencies=["pandas", "numpy", "jax", "jaxlib"]
+
+[build.system]
+requires = [
+"pandas",
+"numpy",
+"jax",
+"jaxlib"
 ]
 
 [project.urls]
