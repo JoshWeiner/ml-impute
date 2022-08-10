@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ml-impute"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Joshua Weiner", email="joshuaweinernyc@gmail.com" },
 ]
