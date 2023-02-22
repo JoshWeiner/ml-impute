@@ -1,53 +1,91 @@
+import time
 import numpy as np
 import pandas as pd
+from multiprocessing import Pool
 from .customThread import CustomThread
 from .iterativeFAMD import iterativeFAMD
+from .daskIterativeFAMD import daskIterativeFAMD
 
-class Generator(iterativeFAMD):
+class Generator(object):
     
     def __init__(self):
-        super(Generator, self).__init__()
+        self.engine = 'default'
 
-    def generate(self, dataframe, encode_cols=[], exclude_cols=[], max_iter=1000, tol = 1e-4, explained_var = 0.95, method="single", n_versions = 20, noise="gaussian"):
-        self.explained_var = explained_var
-        self.max_iter = max_iter
-        self.tol = tol
+    def generate(self, dataframe, encode_cols=[], exclude_cols=[], max_iter=1000, tol = 1e-3, explained_var = 0.95, method="single", n_versions = 20, noise="gaussian", engine='default'):
+        gen = iterativeFAMD()
+
+        if engine == 'dask':
+            gen = daskIterativeFAMD()
+            self.engine = 'dask'
+        
+        gen.explained_var = explained_var
+        gen.max_iter = max_iter
+        gen.tol = tol
 
         if method != "single" and method != "multiple" and method is not None:
             raise ValueError("Method of imputation must be single or multiple.")
         else:
             if method is not None:
-                self.method = method
+                gen.method = method
 
-            if self.method == "single":
-                self.n_versions = 1
-                self.noise = None
+            if gen.method == "single":
+                gen.n_versions = 1
+                gen.noise = None
             else:
-                self.n_versions = n_versions
+                gen.n_versions = n_versions
                 if noise != "gaussian":
                     raise ValueError("Please specify a valid method of adding noise to generated data")
                 else:
-                    self.noise = noise
+                    gen.noise = noise
     
         if len(encode_cols) == 0:
             encode_cols = dataframe.columns[(dataframe.dtypes=='object') | (dataframe.dtypes=='category')].tolist()
-        features_to_encode, drop_cols = self.filterColumns(encode_cols, exclude_cols)
+        features_to_encode, drop_cols = gen.filterColumns(encode_cols, exclude_cols)
         impute_df = dataframe.copy().reset_index().drop(columns=np.array(drop_cols))
-        impute_df, categorical = self.encodeFeatures(impute_df, features_to_encode)
-        self.categorical = categorical
-        self.continuous = impute_df.columns.difference(categorical)
-        if self.method == "single":
-            impute_df = self.famdImpute(impute_df)
-            dataframe = self.fillNa(dataframe.copy(), impute_df, features_to_encode)
+        impute_df, categorical = gen.encodeFeatures(impute_df, features_to_encode)
+        gen.categorical = categorical
+        gen.continuous = impute_df.columns.difference(categorical)
+        if gen.method == "single":
+            impute_df = gen.famdImpute(impute_df)
+            dataframe = gen.fillNa(dataframe.copy(), impute_df, features_to_encode, drop_cols)
             return dataframe
-        else:
+        elif self.engine != 'dask':
+            pool = Pool(processes=n_versions)
             df_dict = {}
-            self.threads = []
-            for i in range(self.n_versions):
-                t = CustomThread(target = self.impute, args=(impute_df.copy(), dataframe.copy(), features_to_encode))
-                self.threads.append(t)
+            gen.threads = []
+            results = []
+            data = (impute_df.copy(), dataframe.copy(), features_to_encode, drop_cols, )
+            for i in range(gen.n_versions):
+                result = pool.apply_async(gen.impute, data)
+                results.append(result)
+            pool.close()
+            #pool.join()
+            ready_count = 0
+            while True:
+                #time.sleep(1)
+                try:
+                    ready = [result.ready() for result in results]
+                    successful = [result.successful() for result in results]
+                except Exception:
+                    continue
+                if all(successful):
+                    break
+                if all(ready) and not all(successful):
+                    raise Exception(f'Workers raised following exceptions {[result._value for result in results if not result.successful()]}')
+                else:
+                    print(np.sum(ready) / n_versions)
+            for i, res in enumerate(results):
+                df_dict[i] = res.get()
+            return df_dict
+        else:
+            gen.threads = []
+            df_dict = {}
+            data = (impute_df.copy(), dataframe.copy(), features_to_encode, drop_cols, )
+            for i in range(n_versions):
+                t = CustomThread(target=gen.impute, args=data)
                 t.start()
-            for i, thread in enumerate(self.threads):
+                gen.threads.append(t)
+            for i, thread in enumerate(gen.threads):
                 df_dict[i] = thread.join()
             return df_dict
             

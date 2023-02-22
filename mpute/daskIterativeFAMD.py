@@ -2,18 +2,24 @@ import math, random, time, os
 import warnings
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
+import dask
+import dask.array as da
+import dask.dataframe as dd
 import jax.numpy as jnp
+from tqdm import tqdm
 
-class iterativeFAMD(object):
+class daskIterativeFAMD(object):
 
     def __init__(self):
+        dask.config.set({"optimization.fuse.ave-width": 5})
         self.explained_var = 0.95
         self.max_iter = 1000
         self.tol = 1e-4
         
     def calculateSVD(self, data):
-        U, s, VT = jnp.linalg.svd(data, full_matrices = False)
+        x = da.from_array(data.values, chunks='auto')#.to_dask_array(lengths=True)
+        #U, s, VT = da.linalg.svd(x, coerce_signs=False) # 30.76, 37.89
+        U, s, VT = da.linalg.svd_compressed(x, k=data.shape[0], compute=True, coerce_signs=False)
         return U, s, VT
         
     def encodeFeatures(self, dataframe, features_to_encode):
@@ -69,10 +75,11 @@ class iterativeFAMD(object):
 
     def famdImpute(self, dataframe):
         j = 0
-        X = dataframe.copy()
+        X = dask.persist(dataframe.copy())[0]
         #for i in range(self.max_iter):
         for i in tqdm(range(self.max_iter), position=0, leave=True):
             prev_df = X.copy()
+            #print("----X----", X)
             new_df, diag = self.initializeValues(X)
             new_diag = diag.copy()
             for j in range(diag.shape[0]):
@@ -82,10 +89,10 @@ class iterativeFAMD(object):
             #XD = pd.DataFrame(np.dot(new_df, new_diag), index=X.index, columns=X.columns)
             M = np.mean(XD, axis=0)
             means = np.broadcast_to(M, XD.shape)
-            resultant = jnp.asarray((XD - means))#(XD - means).to_numpy()#
+            resultant = (XD - means)#.to_numpy()#jnp.asarray((XD - means))
             U, s, VT = self.calculateSVD(resultant)
             n_elements = 0
-            explained_var = np.cumsum((s ** 2)/ np.sum(s ** 2))
+            explained_var = da.cumsum((s ** 2)/ da.sum(s ** 2))
             for index, v in enumerate(explained_var):
                 if v > self.explained_var:
                     n_elements = index
@@ -93,22 +100,23 @@ class iterativeFAMD(object):
             U = U[:, :n_elements]
             sigma = np.diag(s[:n_elements])
             VT = VT[: n_elements]
-            lr = np.dot(np.dot(U, sigma), VT)
+            lr = da.dot(da.dot(U, sigma), VT)
             if self.noise == "gaussian":
-                mu, sig = 0, np.std(lr, axis=0)
+                mu, sig = 0, da.std(lr, axis=0)
                 for index, s in enumerate(sig):
-                    noise = np.random.normal(mu, sig[index], lr.shape[0])
+                    noise = da.random.normal(mu, sig[index], lr.shape[0])
                     lr[:, index] += noise
             mul = (lr + means).dot(diag)
             for index, c in enumerate(X.columns):
-                if np.isnan(dataframe[c].values).any():
-                    X[c] = np.where(dataframe[c].isnull(), mul[:, index], dataframe[c])
+                if da.isnan(dataframe[c].values).any():
+                    replace_col = mul[:, index].compute()
+                    X[c] = np.where(dataframe[c].isna(), replace_col, dataframe[c])
                 else:
                     X[c] = dataframe[c]
-            n_norm = jnp.linalg.norm(X.values - prev_df.values)
-            o_norm = jnp.linalg.norm(prev_df.values)
-            ratio = n_norm / o_norm
-            if (ratio) < self.tol: # Convergence
+            #print("---- X2 ----", X)
+            diff = da.linalg.norm(X.values - prev_df.values)
+            old = da.linalg.norm(prev_df.values)
+            if (diff/old) < self.tol:
                 break
         return X
     

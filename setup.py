@@ -18,7 +18,7 @@ long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="ml-impute",  # Required
-    version="0.0.4",  # Required
+    version="0.0.6",  # Required
     description="A package for synthetic data generation for imputation using single and multiple imputation methods.",  # Optional
     long_description=long_description,  # Optional
     long_description_content_type="text/markdown",  # Optional (see note above)
@@ -51,7 +51,7 @@ setup(
     # package_dir={"": "mpute"},  # Optional
     # packages=find_packages(where="mpute"),  # Required
     python_requires=">=3.6, <4",
-    install_requires=["pandas", "numpy", "jax", "jaxlib"],  # Optional
+    install_requires=["pandas", "numpy", "jax", "jaxlib", "dask", "tqdm"],  # Optional
     packages=["mpute"],
     # extras_require={  # Optional
     #     "dev": ["check-manifest"]

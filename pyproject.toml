@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ml-impute"
-version = "0.0.4"
+version = "0.0.6"
 authors = [
   { name="Joshua Weiner", email="joshuaweinernyc@gmail.com" },
 ]
@@ -12,14 +12,16 @@ description = "A package for synthetic data generation for imputation using sing
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.6"
-dependencies=["pandas", "numpy", "jax", "jaxlib"]
+dependencies=["pandas", "numpy", "jax", "jaxlib", "dask", "tqdm"]
 
 [build.system]
 requires = [
 "pandas",
 "numpy",
 "jax",
-"jaxlib"
+"jaxlib",
+"dask",
+"tqdm"
 ]
 
 [project.urls]
